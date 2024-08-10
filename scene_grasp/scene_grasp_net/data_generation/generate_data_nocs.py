@@ -40,7 +40,8 @@ def load_scale_ae_for_data_generation(model_path):
 def create_img_list(data_dir):
     """ Create train/val/test data list for CAMERA and Real. """
     # CAMERA dataset
-    for subset in ['train', 'val']:
+    for subset in ['val']:
+    # for subset in ['train', 'val']:
         img_list = []
         img_dir = os.path.join(data_dir, 'CAMERA', subset)
         folder_list = [name for name in os.listdir(img_dir) if os.path.isdir(os.path.join(img_dir, name))]
@@ -52,22 +53,23 @@ def create_img_list(data_dir):
         with open(os.path.join(data_dir, 'CAMERA', subset+'_list_all.txt'), 'w') as f:
             for img_path in img_list:
                 f.write("%s\n" % img_path)
-    # Real dataset
-    for subset in ['train', 'test']:
-        img_list = []
-        img_dir = os.path.join(data_dir, 'Real', subset)
-        folder_list = [name for name in sorted(os.listdir(img_dir)) if os.path.isdir(os.path.join(img_dir, name))]
-        for folder in folder_list:
-            img_paths = glob.glob(os.path.join(img_dir, folder, '*_color.png'))
-            img_paths = sorted(img_paths)
-            for img_full_path in img_paths:
-                img_name = os.path.basename(img_full_path)
-                img_ind = img_name.split('_')[0]
-                img_path = os.path.join(subset, folder, img_ind)
-                img_list.append(img_path)
-        with open(os.path.join(data_dir, 'Real', subset+'_list_all.txt'), 'w') as f:
-            for img_path in img_list:
-                f.write("%s\n" % img_path)
+    # # Real dataset
+    # for subset in ['test']:
+    # # for subset in ['train', 'test']:
+    #     img_list = []
+    #     img_dir = os.path.join(data_dir, 'Real', subset)
+    #     folder_list = [name for name in sorted(os.listdir(img_dir)) if os.path.isdir(os.path.join(img_dir, name))]
+    #     for folder in folder_list:
+    #         img_paths = glob.glob(os.path.join(img_dir, folder, '*_color.png'))
+    #         img_paths = sorted(img_paths)
+    #         for img_full_path in img_paths:
+    #             img_name = os.path.basename(img_full_path)
+    #             img_ind = img_name.split('_')[0]
+    #             img_path = os.path.join(subset, folder, img_ind)
+    #             img_list.append(img_path)
+    #     with open(os.path.join(data_dir, 'Real', subset+'_list_all.txt'), 'w') as f:
+    #         for img_path in img_list:
+    #             f.write("%s\n" % img_path)
     print('Write all data paths to file done!')
 
 def align_rotation(R):
@@ -86,7 +88,22 @@ def align_rotation(R):
     return rotation
 
 def process_data(img_path, depth):
-    """ Load instance masks for the objects in the image. """
+    """ Load instance masks for the objects in the image. 
+
+    Args:
+        img_path (str): 
+        depth: numpy array (480,640)
+
+    Returns:
+        masks (numpy array): shape (h, w, num_all_inst), dtype bool
+        coords (numpy array): shape (h, w, num_all_inst, 3)
+        class_ids (list of int):    the 2nd item of each line of *_meta.txt, length == num_all_inst
+        instance_ids (list of int): the 1st item of each line of *_meta.txt, length == num_all_inst
+        model_list (list of str):   the 3rd (Real scanned objs) / 4th (CAMERA objs) item of each line of *_meta.txt, length == num_all_inst
+        bboxes (numpy array): shape (num_all_inst, 4)
+        
+    """
+    
     mask_path = img_path + '_mask.png'
     mask = cv2.imread(mask_path)[:, :, 2]
     mask = np.array(mask, dtype=np.int32)
@@ -167,7 +184,8 @@ def annotate_camera_train(
     data_dir, data_save_dir, model_path, start_ind, end_ind, gen_small_sample
 ):
     _DATASET = datapoint.make_dataset(f'file://{data_save_dir}/CAMERA/train')
-    estimator = load_estimator(model_path)
+    # estimator = load_estimator(model_path)
+    estimator = load_scale_ae_for_data_generation(model_path)
     _camera = camera.NOCS_Camera()
     """ Generate gt labels for CAMERA train data. """
     camera_train = open(os.path.join(data_dir, 'CAMERA', 'train_list_all.txt')).read().splitlines()
@@ -400,21 +418,44 @@ def annotate_real_train(
 
 def annotate_test_data(
   data_dir, data_save_dir, source, subset, model_path, start_ind, end_ind,
+#   data_dir, data_save_dir, source, subset, model_path, # start_ind, end_ind,
   object_deformnet_nocs_results_dir, gen_small_sample
 ):
     """ Generate gt labels for test data.
         Properly copy handle_visibility provided by NOCS gts.
+    
+    1. Load the list of imgs (img_list) in NOCSDataset, from <subset>_list_all.txt
+    2. Load model pointclouds, from obj_models/<subset>.pkl
+    3. Iterate over imgs in img_list, for each image:
+        a. load stereo image and instance masks for objects in the image, 
+        b. load NOCS ground truth from object_deformnet_nocs_results_dir, 
+        c. get seg mask based on instance masks
+        d. compute heatmap from masks, compute latent embeddings from model points, compute abs pose field from ground truth, 
+        e. write datapoint.Panoptic to datapoint.Dataset (*.pickle.zstd)
+
+    Args:
+        data_dir (_type_): _description_
+        data_save_dir (_type_): _description_
+        source (_type_): _description_
+        subset (_type_): _description_
+        model_path (_type_): _description_
+        start_ind (_type_): _description_
+        end_ind (_type_): _description_
+        object_deformnet_nocs_results_dir (_type_): _description_
+        gen_small_sample (_type_): _description_
     """
     _DATASET = datapoint.make_dataset(f'file://{data_save_dir}/{source}/{subset}')
-    estimator = load_estimator(model_path)
+    # estimator = load_estimator(model_path)
+    estimator = load_scale_ae_for_data_generation(model_path)
     object_deformnet_nocs_results_dir = pathlib.Path(object_deformnet_nocs_results_dir)
     _camera = camera.NOCS_Real()
     camera_val = open(os.path.join(data_dir, 'CAMERA', 'val_list_all.txt')).read().splitlines()
-    real_test = open(os.path.join(data_dir, 'Real', 'test_list_all.txt')).read().splitlines()
+    # real_test = open(os.path.join(data_dir, 'Real', 'test_list_all.txt')).read().splitlines()
     camera_intrinsics = np.array([[577.5, 0, 319.5], [0, 577.5, 239.5], [0, 0, 1]])
     real_intrinsics = np.array([[591.0125, 0, 322.525], [0, 590.16775, 244.11084], [0, 0, 1]])
     # compute model size
-    model_file_path = ['obj_models/camera_val.pkl', 'obj_models/real_test.pkl']
+    model_file_path = ['obj_models/camera_val.pkl']
+    # model_file_path = ['obj_models/camera_val.pkl', 'obj_models/real_test.pkl']
     models = {}
     for path in model_file_path:
         with open(os.path.join(data_dir, path), 'rb') as f:
@@ -555,9 +596,10 @@ def annotate_test_data(
                 stereo=stereo_datapoint,
                 depth=noisy_depth,
                 segmentation=seg_mask,
+                modelIds=model_list,
                 object_poses=[obb_datapoint],
                 boxes=[],
-                detections=[]
+                detections=[],
                 )
                 _DATASET.write(panoptic_datapoint)
                 if gen_small_sample and img_ind > 20:
@@ -605,15 +647,18 @@ if __name__ == '__main__':
   print("Generating image lists")
   create_img_list(data_dir)
   print("Image lists generated...\n")
-  print("Generating Camera Train data...")
-  annotate_camera_train(data_dir, estimator, data_save_root, args.gen_small_sample)
-  print("Generating Real Train data...")
-  annotate_real_train(data_dir, estimator, data_save_root, args.gen_small_sample)
-  print("Generating Camera Val data...")
-  annotate_test_data(
-    data_dir, estimator, data_save_root, 'CAMERA', 'val',
-    args.object_deformnet_nocs_results_dir, args.gen_small_sample)
-  print("Generating Real Test data...")
-  annotate_test_data(
-    data_dir, estimator, data_save_root, 'Real', 'test',
-    args.object_deformnet_nocs_results_dir, args.gen_small_sample)
+#   print("Generating Camera Train data...")
+#   annotate_camera_train(data_dir, estimator, data_save_root, args.gen_small_sample)
+#   print("Generating Real Train data...")
+#   annotate_real_train(data_dir, estimator, data_save_root, args.gen_small_sample)
+#   print("Generating Camera Val data...")
+#   annotate_test_data(
+#     data_dir, estimator, data_save_root, 'CAMERA', 'val',
+#     args.object_deformnet_nocs_results_dir, args.gen_small_sample)
+#   print("Generating Real Test data...")
+# #   annotate_test_data(
+# #     data_dir, estimator, data_save_root, 'Real', 'test',
+# #     args.object_deformnet_nocs_results_dir, args.gen_small_sample)
+#   annotate_test_data(
+#     data_dir, data_save_root, 'Real', 'test', model_path, 
+#     args.object_deformnet_nocs_results_dir, args.gen_small_sample)

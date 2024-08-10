@@ -74,4 +74,5 @@ class Dataset(Dataset):
       )
       pose_target.convert_to_torch_from_numpy()
     scene_name = dp.scene_name
-    return anaglyph, segmentation_target, depth_target, pose_target, dp.detections, scene_name
+    modelIds = dp.modelIds
+    return anaglyph, segmentation_target, modelIds, depth_target, pose_target, dp.detections, scene_name

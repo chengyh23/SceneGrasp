@@ -51,6 +51,19 @@ class OBBOutput:
     return heat * keep
 
   def compute_pointclouds_and_poses(self, min_confidence, is_target):
+    """Get objects from one image. 
+    for batch_size==1 only
+
+    Args:
+        min_confidence: used to extract peaks from heatmap
+        is_target (bool): _description_
+
+    Returns:
+        latent_embeddings (list of numpy array): an embedding (128,) for each object
+        abs_pose_outputs (list of simnet.lib.transform.Pose)
+        scores (list of float)
+        indices (list of numpy array): an (2,) for each object
+    """
     if is_target:
       heatmap = np.ascontiguousarray(self.heatmap.cpu().numpy())
       
@@ -65,6 +78,7 @@ class OBBOutput:
     else:
       if not self.is_numpy:
         self.convert_to_numpy_from_torch()
+      assert self.heatmap.shape[0]==1 and self.latent_emb.shape[0]==1 and self.abs_pose_field.shape[0]==1
       latent_embeddings, abs_pose_outputs, img, scores, indices = compute_pointclouds_and_poses(np.copy(self.heatmap[0]), np.copy(self.latent_emb[0]), np.copy(self.abs_pose_field[0]), min_confidence)
     return latent_embeddings, abs_pose_outputs, img, scores, indices
 

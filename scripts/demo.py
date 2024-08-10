@@ -69,6 +69,7 @@ def main(hparams):
         for pred_pcl in pred_pcls:
             pred_pcls_o3d.append(get_o3d_pcd_from_np(pred_pcl))
         o3d_pcl = convert_realsense_rgb_depth_to_o3d_pcl(rgb, depth / 1000, camera_k)
+        o3d.visualization.webrtc_server.enable_webrtc()
         print(">Showing predicted shapes:")
         o3d.visualization.draw(  # type:ignore
             [o3d_pcl] + pred_pcls_o3d

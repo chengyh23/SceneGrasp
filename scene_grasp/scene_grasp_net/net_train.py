@@ -79,7 +79,7 @@ if __name__ == "__main__":
   print('Epochs:', epochs)
 
   model = PanopticModel(hparams, epochs, train_ds, EvalMethod())
-  model_checkpoint = ModelCheckpoint(filepath=str(logs_dir), save_top_k=-1, period=1, mode='max')
+  model_checkpoint = ModelCheckpoint(dirpath=str(logs_dir), save_top_k=-1, every_n_epochs=1, mode='max')
   wandb_logger = loggers.WandbLogger(name=hparams.wandb_name, project='CenterSnap')
 
   if hparams.finetune_real:
@@ -97,15 +97,16 @@ if __name__ == "__main__":
     )
   else:
     trainer = pl.Trainer(
-        max_nb_epochs=epochs,
-        early_stop_callback=None,
-        gpus=[_GPU_TO_USE],
-        checkpoint_callback=model_checkpoint,
+        max_epochs=epochs,
+        # early_stop_callback=None,
+        devices=[_GPU_TO_USE],
+        # checkpoint_callback=model_checkpoint,
+        callbacks=[model_checkpoint],
         val_check_interval=1.0,
         logger=wandb_logger,
-        default_save_path=str(logs_dir),
-        use_amp=False,
-        print_nan_grads=True,
+        default_root_dir=str(logs_dir),
+        # use_amp=False,
+        # print_nan_grads=True,
     )
 
   trainer.fit(model)

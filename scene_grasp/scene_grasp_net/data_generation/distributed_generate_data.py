@@ -15,7 +15,7 @@ def main():
     parser.add_argument("--type", type=str, default="camera_train")
     args = parser.parse_args()
 
-    worker_per_gpu = 12
+    worker_per_gpu = 2 # 12
     GPUS = [0, 1, 2, 3]
     print("=============> Using GPUS ", GPUS)
     workers = len(GPUS) * worker_per_gpu
@@ -76,7 +76,7 @@ def main():
         my_env["CUDA_VISIBLE_DEVICES"] = str(curr_gpu)
         command = [
             "python",
-            "scene_grasp_net/data_generation/distributed_worker.py",
+            "scene_grasp/scene_grasp_net/data_generation/distributed_worker.py",
             "--data_dir",
             str(args.data_dir),
             "--model_path",

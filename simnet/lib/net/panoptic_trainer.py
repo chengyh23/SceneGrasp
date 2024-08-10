@@ -22,13 +22,15 @@ class PanopticModel(pl.LightningModule):
   ):
     super().__init__()
 
-    self.hparams = hparams
+    # self.hparams = hparams
+    self.save_hyperparameters(hparams)
     self.epochs = epochs
     self.train_dataset = train_dataset
 
     self.model = common.get_model(hparams)
     self.eval_metrics = eval_metric
     self.preprocess_func = preprocess_func
+    # self.validation_step_outputs = []
 
   def forward(self, image):
     seg_output, depth_output, small_depth_output, pose_output = self.model(
@@ -36,8 +38,8 @@ class PanopticModel(pl.LightningModule):
     )
     return seg_output, depth_output, small_depth_output, pose_output
   
-  def optimizer_step(self, epoch_nb, batch_nb, optimizer, optimizer_i, second_order_closure=None):
-    super().optimizer_step(epoch_nb, batch_nb, optimizer, optimizer_i, second_order_closure)
+  def optimizer_step(self, epoch_nb, batch_nb, optimizer, second_order_closure=None):
+    super().optimizer_step(epoch_nb, batch_nb, optimizer, second_order_closure)
     if batch_nb == 0:
       for param_group in optimizer.param_groups:
         learning_rate = param_group['lr']
@@ -91,6 +93,7 @@ class PanopticModel(pl.LightningModule):
       loss = loss + seg_output.compute_loss(seg_target, log, f'{prefix_loss}_detailed/loss/seg')      
       if pose_targets[0] is not None:
         loss = loss + pose_outputs.compute_loss(pose_targets, log, f'{prefix_loss}_detailed/pose')
+      # self.validation_step_outputs.append(loss)
       log['validation/loss/total'] = loss.item()
       if batch_idx < 5 or scene_name[0] == 'fmk':
         llog = {}
@@ -106,17 +109,21 @@ class PanopticModel(pl.LightningModule):
         logger.log(llog)
     return log
 
-  def validation_epoch_end(self, outputs):
-    self.trainer.checkpoint_callback.save_best_only = False
-    mean_dict = {}
-    for key in outputs[0].keys():
-        mean_dict[key] = np.mean([d[key] for d in outputs], axis=0)
-    logger = self.logger.experiment
-    logger.log(mean_dict)
-    log = {}
-    return {'log': log}
+  # def validation_epoch_end(self, outputs):
+  #   self.trainer.checkpoint_callback.save_best_only = False
+  #   mean_dict = {}
+  #   for key in outputs[0].keys():
+  #       mean_dict[key] = np.mean([d[key] for d in outputs], axis=0)
+  #   logger = self.logger.experiment
+  #   logger.log(mean_dict)
+  #   log = {}
+  #   return {'log': log}
+  # def on_validation_epoch_end(self):
+  #   epoch_average = torch.stack(self.validation_step_outputs).mean()
+  #   self.log("validation_epoch_average", epoch_average)
+  #   self.validation_step_outputs.clear()  # free memory
 
-  @pl.data_loader
+  # @pl.data_loader
   def train_dataloader(self):
     return common.get_loader(
         self.hparams,
@@ -124,7 +131,7 @@ class PanopticModel(pl.LightningModule):
         preprocess_func=self.preprocess_func,
         datapoint_dataset=self.train_dataset
     )
-  @pl.data_loader
+  # @pl.data_loader
   def val_dataloader(self):
     return common.get_loader(self.hparams, "val", preprocess_func=self.preprocess_func)
 

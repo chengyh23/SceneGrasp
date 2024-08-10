@@ -38,6 +38,59 @@ class SceneGraspModel:
         self.scale_ae.load_state_dict(torch.load(hparams.scale_ae_path))
         self.scale_ae.cuda()
 
+    def get_predictions_from_preprocessed(self, image, camera_k):
+        image = image.cuda()
+        with torch.no_grad():
+            seg_output, _, _, pose_output = self.model.forward(image)
+            (
+                latent_emb_outputs,
+                abs_pose_outputs,
+                img_output,
+                scores_out,
+                output_indices,
+            ) = pose_output.compute_pointclouds_and_poses(
+                self.min_confidence, is_target=False
+            )
+
+            if len(abs_pose_outputs) == 0:
+                print("No object found. Continue")
+                return None
+
+            emb = torch.tensor(latent_emb_outputs).cuda().to(torch.float)
+            scales = [
+                abs_pose_outputs[j].scale_matrix[0, 0]
+                for j in range(len(abs_pose_outputs))
+            ]
+            scales = torch.tensor(scales).cuda().to(torch.float).unsqueeze(dim=-1)
+            _, endpoints = self.scale_ae(None, scales, emb)
+
+        endpoints = {
+            key: value.detach().cpu().numpy() for key, value in endpoints.items()
+        }
+        pred_xyzs = endpoints["xyz"]
+        canonical_pcls = [pred_xyz for pred_xyz in pred_xyzs]
+        pred_scale_matrices = np.empty((len(abs_pose_outputs), 4, 4))
+        pred_pose_matrices = np.empty((len(abs_pose_outputs), 4, 4))
+        for abs_pose_out_ind in range(len(abs_pose_outputs)):
+            pred_pose = abs_pose_outputs[abs_pose_out_ind]
+            pred_scale_matrices[abs_pose_out_ind, :, :] = pred_pose.scale_matrix
+            pred_pose_matrices[abs_pose_out_ind, :, :] = pred_pose.camera_T_object
+
+        pred_class_ids = get_ids_from_seg_output(seg_output, output_indices)
+        nocs_dp = NOCSDataPoint(
+            rgb=None,
+            depth=None,
+            camera_k=camera_k,
+            seg_masks=None,
+            class_ids=pred_class_ids,
+            class_confidences=scores_out,
+            obj_canonical_pcls=canonical_pcls,
+            scale_matrices=pred_scale_matrices,
+            pose_matrices=pred_pose_matrices,
+            endpoints=endpoints,
+            metadata={},
+        )
+        return nocs_dp
     def get_predictions(self, rgb, depth, camera_k):
         left_img = rgb
         far_indices = depth > self.MAX_DEPTH_THRESHOLD

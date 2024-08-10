@@ -134,7 +134,7 @@ def simnet_collate(batch):
   for ii in range(len(batch[0])):
     targets.append([batch_element[ii] for batch_element in batch])
   stacked_images = torch.stack(targets[0])
-  return stacked_images, targets[1], targets[2], targets[3], targets[4], targets[5]
+  return stacked_images, targets[1], targets[2], targets[3], targets[4], targets[5], targets[6]
 
 
 def prune_state_dict(state_dict):

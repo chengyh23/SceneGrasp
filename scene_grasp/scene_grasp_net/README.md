@@ -9,13 +9,27 @@ SceneGraspNet.
 [distributed_generate_data.py](scene_grasp/scene_grasp_net/data_generation/distributed_generate_data.py)
 as per your resource constraints.
 
+- Organize unzipped NOCS dataset as [object-deformnet](https://github.com/mentian/object-deformnet?tab=readme-ov-file#datasets)
+
+- To generate img_list `subset_list_all.txt`
+```bash
+python scene_grasp/scene_grasp_net/data_generation/generate_data_nocs.py \
+ --data_dir /media/sdb2/chengyh23/NOCS \
+ --model_path checkpoints/scale_ae.pth
+```
+
+- To sample points from mesh model and normalize to NOCS. `NOCSDataset/obj_models/subset.pkl`
+```bash
+python scene_grasp/scene_grasp_net/data_generation/shape_data.py
+```
+
 - To generate training and validation data for SceneGraspNet, run the following script
 four times with `--type` chosen from the list `[camera_train, camera_val, real_train, real_val]`
 respectively. Example:
 ```bash
 python scene_grasp/scene_grasp_net/data_generation/distributed_generate_data.py \
  --data_dir data/NOCSDataset \
- --data_save_dir data/scene_grasp_net_preprpcessed_data/
+ --data_save_dir data/scene_grasp_net_preprocessed_data/
  --model_path checkpoints/scale_ae.pth \
  --type camera_train \
  --object_deformnet_nocs_results_dir <path-to-nocs-results-dir> \

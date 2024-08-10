@@ -74,6 +74,7 @@ class Panoptic:
   stereo: Stereo
   depth: np.ndarray
   segmentation: np.ndarray
+  modelIds: list  # objects' ShapeNet modelId, corresponding to segmentation (class id)
   object_poses: list
   boxes: list
   detections: list

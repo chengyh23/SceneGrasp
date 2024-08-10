@@ -7,3 +7,7 @@ logs/
 **/pyvenv*
 **/results_**
 **/temp_*/
+
+checkpoints/
+checkpoints.zip
+data
