@@ -1,5 +1,7 @@
+import os
 import matplotlib
 import numpy as np
+import cv2
 import torch
 from scene_grasp.scale_shape_grasp_ae.model.auto_encoder_scale_grasp import (
     PointCloudScaleBasedGraspAE,
@@ -39,6 +41,15 @@ class SceneGraspModel:
         self.scale_ae.cuda()
 
     def get_predictions_from_preprocessed(self, image, camera_k):
+        """_summary_
+
+        Args:
+            image: torch tensor [1, 4, 480, 640]
+            camera_k: numpy array (4, 4)
+
+        Returns:
+            nocs_dp: NOCSDataPoint
+        """
         image = image.cuda()
         with torch.no_grad():
             seg_output, _, _, pose_output = self.model.forward(image)
@@ -91,6 +102,7 @@ class SceneGraspModel:
             metadata={},
         )
         return nocs_dp
+
     def get_predictions(self, rgb, depth, camera_k):
         left_img = rgb
         far_indices = depth > self.MAX_DEPTH_THRESHOLD

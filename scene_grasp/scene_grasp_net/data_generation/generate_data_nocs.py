@@ -100,7 +100,7 @@ def process_data(img_path, depth):
         class_ids (list of int):    the 2nd item of each line of *_meta.txt, length == num_all_inst
         instance_ids (list of int): the 1st item of each line of *_meta.txt, length == num_all_inst
         model_list (list of str):   the 3rd (Real scanned objs) / 4th (CAMERA objs) item of each line of *_meta.txt, length == num_all_inst
-        bboxes (numpy array): shape (num_all_inst, 4)
+        bboxes (numpy array): shape (num_all_inst, 4). y1, x1, y2, x2
         
     """
     
@@ -598,8 +598,10 @@ def annotate_test_data(
                 segmentation=seg_mask,
                 modelIds=model_list,
                 object_poses=[obb_datapoint],
-                boxes=[],
+                # boxes=[],
+                boxes=bboxes,
                 detections=[],
+                img_name=os.path.join(source, img_path),
                 )
                 _DATASET.write(panoptic_datapoint)
                 if gen_small_sample and img_ind > 20:

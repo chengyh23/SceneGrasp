@@ -29,7 +29,7 @@ respectively. Example:
 ```bash
 python scene_grasp/scene_grasp_net/data_generation/distributed_generate_data.py \
  --data_dir data/NOCSDataset \
- --data_save_dir data/scene_grasp_net_preprocessed_data/
+ --data_save_dir data/scene_grasp_net_preprocessed_data/ \
  --model_path checkpoints/scale_ae.pth \
  --type camera_train \
  --object_deformnet_nocs_results_dir <path-to-nocs-results-dir> \

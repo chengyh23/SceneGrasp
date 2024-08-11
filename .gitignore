@@ -11,3 +11,4 @@ logs/
 checkpoints/
 checkpoints.zip
 data
+results/

@@ -363,7 +363,10 @@ def draw_bboxes(img, img_pts, axes, color):
     img = cv2.arrowedLine(img, tuple(axes[0]), tuple(axes[2]), (0, 255, 0), 4) ## y last
 
     return img
-
+def draw_bboxes_2d(img, img_pts, color):
+    for i, j in zip([0, 1, 2, 3], [1, 3, 0, 2]):
+        img = cv2.line(img, tuple(img_pts[i]), tuple(img_pts[j]), color, 3)
+    return img
 def custom_draw_geometry_with_rotation(pcd):
     def rotate_view(vis):
         opt = vis.get_render_option()

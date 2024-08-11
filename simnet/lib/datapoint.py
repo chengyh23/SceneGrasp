@@ -78,6 +78,7 @@ class Panoptic:
   object_poses: list
   boxes: list
   detections: list
+  img_name: str # prefix of NOCS image, eg. CAMERA/test/scene_1/0000
   keypoints: list = dataclasses.field(default_factory=list)
   instance_mask: np.ndarray = None
   scene_name: str = 'sim'
