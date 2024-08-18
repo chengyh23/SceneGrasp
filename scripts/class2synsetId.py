@@ -36,6 +36,22 @@ CLS2SYNSET_ID = {
     5: "03642806",
     6: "03797390",
 }
+WORD2CLS_ID = {
+    "bottle":   1,
+    "bowl":     2,
+    "camera":   3,
+    "can":      4,
+    "laptop":   5,
+    "mug":      6,
+}
+WORD2SYNSET_ID = {
+    "bottle":   "02876657",
+    "bowl":     "02880940",
+    "camera":   "02942699",
+    "can":      "02946921",
+    "laptop":   "03642806",
+    "mug":      "03797390",
+}
 if __name__ == "__main__":
     """
     Iterate images' meta info, Check the mapping from class_id to synsetId.

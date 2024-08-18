@@ -64,7 +64,7 @@ class SceneGraspModel:
             )
 
             if len(abs_pose_outputs) == 0:
-                print("No object found. Continue")
+                # print("No object found. Continue")
                 return None
 
             emb = torch.tensor(latent_emb_outputs).cuda().to(torch.float)

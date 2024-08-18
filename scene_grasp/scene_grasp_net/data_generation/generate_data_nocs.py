@@ -427,8 +427,8 @@ def annotate_test_data(
     1. Load the list of imgs (img_list) in NOCSDataset, from <subset>_list_all.txt
     2. Load model pointclouds, from obj_models/<subset>.pkl
     3. Iterate over imgs in img_list, for each image:
-        a. load stereo image and instance masks for objects in the image, 
-        b. load NOCS ground truth from object_deformnet_nocs_results_dir, 
+        a. Load stereo image and instance masks for objects in the image, 
+        b. Load NOCS ground truth (class_ids, bboxes, RTs, scales) from object_deformnet_nocs_results_dir, 
         c. get seg mask based on instance masks
         d. compute heatmap from masks, compute latent embeddings from model points, compute abs pose field from ground truth, 
         e. write datapoint.Panoptic to datapoint.Dataset (*.pickle.zstd)

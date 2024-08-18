@@ -16,8 +16,21 @@ class NOCSDataPoint:
         endpoints,
         metadata,
     ):
-        """
+        """_summary_
         pose @ scale @ obj_canonical_pcls -> obj pcl in camera frame
+        
+        Args:
+            rgb (_type_): _description_
+            depth (_type_): _description_
+            camera_k (numpy array (4,4)): _description_
+            seg_masks (_type_): _description_
+            class_ids (List[int]): len == M
+            class_confidences (List[float]): len == M
+            obj_canonical_pcls (List[numpy array (2048, 3)]): len ==M
+            scale_matrices (numpy array (M, 4, 4)): _description_
+            pose_matrices (numpy array (M, 4, 4)): _description_
+            endpoints (dict): dict_keys(['xyz', 'success', 'grasp_width_one_hot', 'baseline_dir', 'approach_dir'])
+            metadata (_type_): _description_
         """
         self.rgb = rgb
         self.depth = depth

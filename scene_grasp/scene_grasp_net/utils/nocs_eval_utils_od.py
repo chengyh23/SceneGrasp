@@ -355,8 +355,8 @@ def compute_IoU_matches(gt_class_ids, gt_sRT, gt_size, gt_handle_visibility,
                 synset_names[pred_class_ids[i]], synset_names[gt_class_ids[j]], gt_handle_visibility[j])
     # loop through predictions and find matching ground truth boxes
     num_iou_3d_thres = len(iou_3d_thresholds)
-    pred_matches = -1 * np.ones([num_iou_3d_thres, num_pred])
-    gt_matches = -1 * np.ones([num_iou_3d_thres, num_gt])
+    pred_matches = -1 * np.ones([num_iou_3d_thres, num_pred], dtype=np.int32)
+    gt_matches = -1 * np.ones([num_iou_3d_thres, num_gt], dtype=np.int32)
     for s, iou_thres in enumerate(iou_3d_thresholds):
         for i in range(indices.shape[0]):
             # Find best matching ground truth box
@@ -384,6 +384,64 @@ def compute_IoU_matches(gt_class_ids, gt_sRT, gt_size, gt_handle_visibility,
                     break
     return gt_matches, pred_matches, overlaps, indices
 
+def compute_IoU_matches_origin_indexed(gt_class_ids, gt_sRT, gt_size, gt_handle_visibility,
+                        pred_class_ids, pred_sRT, pred_size, pred_scores,
+                        synset_names, iou_3d_thresholds, score_threshold=0):
+    """ 
+    Same as compute_IoU_matches, except for indices in **_matches (Returns).
+    - In this function, index original sequence of groundtruth/predicted objects in input params; 
+    - in compute_IoU_matches, index predicted score-sorted object sequence.
+    
+    Modifications: 
+    1) Do not reorder pred_class_ids, pred_size, pred_sRT
+    2) use `indices` directly, rather than index of `indices`
+    """
+    num_pred = len(pred_class_ids)
+    num_gt = len(gt_class_ids)
+    indices = np.zeros(0)
+    if num_pred:
+        # Sort predictions by score from high to low
+        indices = np.argsort(pred_scores)[::-1]
+        # pred_class_ids = pred_class_ids[indices].copy()
+        # pred_size = pred_size[indices].copy()
+        # pred_sRT = pred_sRT[indices].copy()
+    # compute IoU overlaps [pred_bboxs gt_bboxs]
+    overlaps = np.zeros((num_pred, num_gt), dtype=np.float32)
+    for i in range(num_pred):
+        for j in range(num_gt):
+            overlaps[i, j] = compute_3d_IoU(pred_sRT[i], gt_sRT[j], pred_size[i, :], gt_size[j],
+                synset_names[pred_class_ids[i]], synset_names[gt_class_ids[j]], gt_handle_visibility[j])
+    # loop through predictions and find matching ground truth boxes
+    num_iou_3d_thres = len(iou_3d_thresholds)
+    pred_matches = -1 * np.ones([num_iou_3d_thres, num_pred], dtype=np.int32)
+    gt_matches = -1 * np.ones([num_iou_3d_thres, num_gt], dtype=np.int32)
+    for s, iou_thres in enumerate(iou_3d_thresholds):
+        # for i in range(indices.shape[0]):
+        for i in indices:
+            # Find best matching ground truth box
+            # 1. Sort matches by score
+            sorted_ixs = np.argsort(overlaps[i])[::-1]
+            # 2. Remove low scores
+            low_score_idx = np.where(overlaps[i, sorted_ixs] < score_threshold)[0]
+            if low_score_idx.size > 0:
+                sorted_ixs = sorted_ixs[:low_score_idx[0]]
+            # 3. Find the match
+            for j in sorted_ixs:
+                # If ground truth box is already matched, go to next one
+                if gt_matches[s, j] > -1:
+                    continue
+                # If we reach IoU smaller than the threshold, end the loop
+                iou = overlaps[i, j]
+                if iou < iou_thres:
+                    break
+                # Do we have a match?
+                if not pred_class_ids[i] == gt_class_ids[j]:
+                    continue
+                if iou > iou_thres:
+                    gt_matches[s, j] = i
+                    pred_matches[s, i] = j
+                    break
+    return gt_matches, pred_matches, overlaps, indices
 
 def compute_RT_errors(sRT_1, sRT_2, class_id, handle_visibility, synset_names):
     """
