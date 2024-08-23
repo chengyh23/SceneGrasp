@@ -480,7 +480,9 @@ def annotate_test_data(
         valid_img_list = []
         # img_list = np.array(img_list)[np.array([2, 500, 1000, 1500, 1700, 1300, 2000, 2300, 2350, 2750])].tolist()
         img_list = img_list[start_ind:end_ind]
-        for img_ind, img_path in tqdm(enumerate(img_list)):
+        # for img_ind, img_path in tqdm(enumerate(img_list)):
+        for img_ind, img_path in enumerate(img_list):
+            print(f"{img_ind}> {img_path}", end="\t")  # DEBUG
             try:
                 img_full_path = os.path.join(data_dir, source, img_path)
                 depth_full_path_real = img_full_path + '_depth.png'
@@ -491,10 +493,12 @@ def annotate_test_data(
                             os.path.exists(img_full_path + '_meta.txt') and \
                             os.path.exists(depth_full_path_real)
                 if not all_exist:
+                    print("not all exist")
                     continue
                 depth = load_depth(depth_full_path_real)
                 masks, coords, class_ids, instance_ids, model_list, bboxes = process_data(img_full_path, depth)
                 if instance_ids is None:
+                    print("no valid instance here")
                     continue
                 num_insts = len(instance_ids)
                 # match each instance with NOCS ground truth to properly assign gt_handle_visibility
@@ -604,13 +608,190 @@ def annotate_test_data(
                 img_name=os.path.join(source, img_path),
                 )
                 _DATASET.write(panoptic_datapoint)
+                print("Written:", img_ind, img_path)
                 if gen_small_sample and img_ind > 20:
                     break
             except Exception as e:
                 print("Exception occured while processing ", img_ind, img_path)
-                print("\tException: ", e) 
+                # print("\tException: ", e) 
+                print("\t{}: {}".format(type(e).__name__, e)) 
             ### Finish writing datapoint
 
+
+def annotate_test_data_debug(
+  data_dir, data_save_dir, source, subset, model_path, start_ind, end_ind,
+#   data_dir, data_save_dir, source, subset, model_path, # start_ind, end_ind,
+  object_deformnet_nocs_results_dir, gen_small_sample
+):
+    _DATASET = datapoint.make_dataset(f'file://{data_save_dir}/{source}/{subset}')
+    # estimator = load_estimator(model_path)
+    estimator = load_scale_ae_for_data_generation(model_path)
+    object_deformnet_nocs_results_dir = pathlib.Path(object_deformnet_nocs_results_dir)
+    _camera = camera.NOCS_Real()
+    camera_val = open(os.path.join(data_dir, 'CAMERA', 'val_list_all.txt')).read().splitlines()
+    # real_test = open(os.path.join(data_dir, 'Real', 'test_list_all.txt')).read().splitlines()
+    camera_intrinsics = np.array([[577.5, 0, 319.5], [0, 577.5, 239.5], [0, 0, 1]])
+    real_intrinsics = np.array([[591.0125, 0, 322.525], [0, 590.16775, 244.11084], [0, 0, 1]])
+    # compute model size
+    model_file_path = ['obj_models/camera_val.pkl']
+    # model_file_path = ['obj_models/camera_val.pkl', 'obj_models/real_test.pkl']
+    models = {}
+    for path in model_file_path:
+        with open(os.path.join(data_dir, path), 'rb') as f:
+            models.update(cPickle.load(f))
+    model_sizes = {}
+    for key in models.keys():
+        model_sizes[key] = 2 * np.amax(np.abs(models[key]), axis=0)
+    # meta info for re-label mug category
+    with open(os.path.join(data_dir, 'obj_models/mug_meta.pkl'), 'rb') as f:
+        mug_meta = cPickle.load(f)
+
+    #TEST MODELS
+    # obj_model_dir = os.path.join(data_dir, 'obj_models')
+    # with open(os.path.join(obj_model_dir, 'real_test.pkl'), 'rb') as f:
+    #     obj_models = cPickle.load(f)
+    
+    if source == 'CAMERA':
+        subset_meta = [('CAMERA', camera_val, camera_intrinsics, 'val')]
+    else:
+        subset_meta = [('Real', real_test, real_intrinsics, 'test')]
+    for source, img_list, intrinsics, subset in subset_meta:
+        valid_img_list = []
+        # img_list = np.array(img_list)[np.array([2, 500, 1000, 1500, 1700, 1300, 2000, 2300, 2350, 2750])].tolist()
+        img_list = img_list[start_ind:end_ind]
+        print(source, subset)
+        # for img_ind, img_path in tqdm(enumerate(img_list)):
+        for img_ind, img_path in enumerate(img_list):
+            print("In loop", img_path, flush=True)
+            # try:
+            img_full_path = os.path.join(data_dir, source, img_path)
+            depth_full_path_real = img_full_path + '_depth.png'
+            all_exist = os.path.exists(img_full_path + '_color.png') and \
+                        os.path.exists(img_full_path + '_coord.png') and \
+                        os.path.exists(img_full_path + '_depth.png') and \
+                        os.path.exists(img_full_path + '_mask.png') and \
+                        os.path.exists(img_full_path + '_meta.txt') and \
+                        os.path.exists(depth_full_path_real)
+            if not all_exist:
+                continue
+            depth = load_depth(depth_full_path_real)
+            masks, coords, class_ids, instance_ids, model_list, bboxes = process_data(img_full_path, depth)
+            if instance_ids is None:
+                continue
+            num_insts = len(instance_ids)
+            # match each instance with NOCS ground truth to properly assign gt_handle_visibility
+            # nocs_dir = os.path.join(os.path.dirname(data_dir), 'results/nocs_results')
+            nocs_dir = str(object_deformnet_nocs_results_dir.absolute())
+            if source == 'CAMERA':
+                nocs_path = os.path.join(nocs_dir, 'val', 'results_val_{}_{}.pkl'.format(
+                    img_path.split('/')[-2], img_path.split('/')[-1]))
+            else:
+                nocs_path = os.path.join(nocs_dir, 'real_test', 'results_test_{}_{}.pkl'.format(
+                    img_path.split('/')[-2], img_path.split('/')[-1]))
+            with open(nocs_path, 'rb') as f:
+                nocs = cPickle.load(f)
+            gt_class_ids = nocs['gt_class_ids']
+            gt_bboxes = nocs['gt_bboxes']
+            gt_sRT = nocs['gt_RTs']
+            gt_handle_visibility = nocs['gt_handle_visibility']
+            map_to_nocs = []
+            for i in range(num_insts):
+                gt_match = -1
+                for j in range(len(gt_class_ids)):
+                    if gt_class_ids[j] != class_ids[i]:
+                        continue
+                    if np.sum(np.abs(bboxes[i] - gt_bboxes[j])) > 5:
+                        continue
+                    # match found
+                    gt_match = j
+                    break
+                # check match validity
+                assert gt_match > -1, print(img_path, instance_ids[i], 'no match for instance')
+                assert gt_match not in map_to_nocs, print(img_path, instance_ids[i], 'duplicate match')
+                map_to_nocs.append(gt_match)
+            # copy from ground truth, re-label for mug category
+            handle_visibility = gt_handle_visibility[map_to_nocs]
+            sizes = np.zeros((num_insts, 3))
+            poses = np.zeros((num_insts, 4, 4))
+            scales = np.zeros(num_insts)
+            rotations = np.zeros((num_insts, 3, 3))
+            translations = np.zeros((num_insts, 3))
+            for i in range(num_insts):
+                gt_idx = map_to_nocs[i]
+                sizes[i] = model_sizes[model_list[i]]
+                sRT = gt_sRT[gt_idx]
+                s = np.cbrt(np.linalg.det(sRT[:3, :3]))
+                R = sRT[:3, :3] / s
+                T = sRT[:3, 3]
+                # re-label mug category
+                if class_ids[i] == 6:
+                    T0 = mug_meta[model_list[i]][0]
+                    s0 = mug_meta[model_list[i]][1]
+                    T = T - s * R @ T0
+                    s = s / s0
+                # used for test during training
+                scales[i] = s
+                rotations[i] = R
+                translations[i] = T
+                # used for evaluation
+                sRT = np.identity(4, dtype=np.float32)
+                sRT[:3, :3] = s * R
+                sRT[:3, 3] = T
+                poses[i] = sRT
+
+            ### GET CENTERPOINT DATAPOINTS
+            #get latent embeddings
+            model_points = [models[model_list[i]].astype(np.float32) for i in range(len(class_ids))]
+            latent_embeddings = get_latent_embeddings(model_points, estimator)
+            #get poses 
+            abs_poses=[]
+            class_num=1
+            seg_mask = np.zeros([_camera.height, _camera.width])
+            masks_list = []
+            for i in range(len(class_ids)):
+                R = rotations[i]
+                T = translations[i]
+                s = scales[i]
+                sym_ids = [0, 1, 3]
+                cat_id = np.array(class_ids)[i] - 1 
+                if cat_id in sym_ids:
+                    R = align_rotation(R)
+                scale_matrix = np.eye(4)
+                scale_mat = s*np.eye(3, dtype=float)
+                scale_matrix[0:3, 0:3] = scale_mat
+                camera_T_object = np.eye(4)
+                camera_T_object[:3,:3] = R
+                camera_T_object[:3,3] = T
+                seg_mask[masks[:,:,i] > 0] = np.array(class_ids)[i]
+                class_num += 1
+                masks_list.append(masks[:,:,i])
+                abs_poses.append(transform.Pose(camera_T_object=camera_T_object, scale_matrix=scale_matrix))
+            obb_datapoint = obb_inputs.compute_nocs_network_targets(masks_list, latent_embeddings, abs_poses,_camera.height, _camera.width)
+
+            color_img = cv2.imread(img_full_path + '_color.png')
+            depth_array = np.array(depth, dtype=np.float32)/255.0
+
+            DM = DepthManager()
+            noisy_depth  = DM.prepare_depth_data(depth_array)
+            stereo_datapoint = datapoint.Stereo(left_color=color_img, right_color=noisy_depth)
+            panoptic_datapoint = datapoint.Panoptic(
+            stereo=stereo_datapoint,
+            depth=noisy_depth,
+            segmentation=seg_mask,
+            modelIds=model_list,
+            object_poses=[obb_datapoint],
+            # boxes=[],
+            boxes=bboxes,
+            detections=[],
+            img_name=os.path.join(source, img_path),
+            )
+            _DATASET.write(panoptic_datapoint)
+            print("Written:", img_ind, img_path, flush=True)
+            if gen_small_sample and img_ind > 20:
+                break
+            
+            ### Finish writing datapoint
+            
 def get_latent_embeddings(point_clouds, estimator) -> List[np.ndarray]:
     latent_embeddings =[]
     for i in range(len(point_clouds)):

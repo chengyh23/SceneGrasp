@@ -23,8 +23,7 @@ def save_nocs_model_to_file(obj_model_dir):
                      'f42a9784d165ad2f5e723252788c3d6e': np.array([0.117, 0.0, -0.026])}
 
     # CAMERA dataset
-    for subset in ['val']:
-    # for subset in ['train', 'val']:
+    for subset in ['train', 'val']:
         camera = {}
         for synsetId in ['02876657', '02880940', '02942699', '02946921', '03642806', '03797390']:
             print('processing {}/{}'.format(subset, synsetId))
@@ -54,35 +53,35 @@ def save_nocs_model_to_file(obj_model_dir):
         with open(os.path.join(obj_model_dir, 'camera_{}.pkl'.format(subset)), 'wb') as f:
             cPickle.dump(camera, f)
             print('Save to: ',os.path.join(obj_model_dir, 'camera_{}.pkl'.format(subset)))
-    # # Real dataset
-    # for subset in ['real_train', 'real_test']:
-    #     real = {}
-    #     inst_list = glob.glob(os.path.join(obj_model_dir, subset, '*.obj'))
-    #     for inst_path in inst_list:
-    #         print('processing {}/{}'.format(subset, inst_path))
-    #         instance = os.path.basename(inst_path).split('.')[0]
-    #         bbox_file = inst_path.replace('.obj', '.txt')
-    #         bbox_dims = np.loadtxt(bbox_file)
-    #         scale = np.linalg.norm(bbox_dims)
-    #         model_points = sample_points_from_mesh(inst_path, 1024, fps=True, ratio=3)
-    #         model_points /= scale
-    #         # relable mug category
-    #         if 'mug' in instance:
-    #             shift_x = (np.amin(model_points[:, 2]) - np.amax(model_points[:, 2])) / 2 - np.amin(model_points[:, 0])
-    #             shift = np.array([shift_x, 0.0, 0.0])
-    #             model_points += shift
-    #             size = 2 * np.amax(np.abs(model_points), axis=0)
-    #             scale = 1 / np.linalg.norm(size)
-    #             model_points *= scale
-    #             mug_meta[instance] = [shift, scale]
-    #         real[instance] = model_points
-    #     with open(os.path.join(obj_model_dir, '{}.pkl'.format(subset)), 'wb') as f:
-    #         cPickle.dump(real, f)
-    #         print('Save to: ',os.path.join(obj_model_dir, '{}.pkl'.format(subset)))
-    # # save mug_meta information for re-labeling
-    # with open(os.path.join(obj_model_dir, 'mug_meta.pkl'), 'wb') as f:
-    #     cPickle.dump(mug_meta, f)
-    #     print('Save to: ',os.path.join(obj_model_dir, 'mug_meta.pkl'))
+    # Real dataset
+    for subset in ['real_train', 'real_test']:
+        real = {}
+        inst_list = glob.glob(os.path.join(obj_model_dir, subset, '*.obj'))
+        for inst_path in inst_list:
+            print('processing {}/{}'.format(subset, inst_path))
+            instance = os.path.basename(inst_path).split('.')[0]
+            bbox_file = inst_path.replace('.obj', '.txt')
+            bbox_dims = np.loadtxt(bbox_file)
+            scale = np.linalg.norm(bbox_dims)
+            model_points = sample_points_from_mesh(inst_path, 1024, fps=True, ratio=3)
+            model_points /= scale
+            # relable mug category
+            if 'mug' in instance:
+                shift_x = (np.amin(model_points[:, 2]) - np.amax(model_points[:, 2])) / 2 - np.amin(model_points[:, 0])
+                shift = np.array([shift_x, 0.0, 0.0])
+                model_points += shift
+                size = 2 * np.amax(np.abs(model_points), axis=0)
+                scale = 1 / np.linalg.norm(size)
+                model_points *= scale
+                mug_meta[instance] = [shift, scale]
+            real[instance] = model_points
+        with open(os.path.join(obj_model_dir, '{}.pkl'.format(subset)), 'wb') as f:
+            cPickle.dump(real, f)
+            print('Save to: ',os.path.join(obj_model_dir, '{}.pkl'.format(subset)))
+    # save mug_meta information for re-labeling
+    with open(os.path.join(obj_model_dir, 'mug_meta.pkl'), 'wb') as f:
+        cPickle.dump(mug_meta, f)
+        print('Save to: ',os.path.join(obj_model_dir, 'mug_meta.pkl'))
 
 
 def save_model_to_hdf5(obj_model_dir, n_points, fps=False, include_distractors=False, with_normal=False):

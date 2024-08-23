@@ -3,7 +3,7 @@ import numpy
 import argparse
 from scene_grasp.scene_grasp_net.data_generation.generate_data_nocs import (
     annotate_camera_train,
-    annotate_test_data,
+    annotate_test_data, annotate_test_data_debug,
     annotate_real_train,
     add_generate_data_args,
 )
@@ -26,6 +26,7 @@ def main(args):
             args.gen_small_sample,
         )
     elif args.type == "camera_val":
+        # annotate_test_data_debug(
         annotate_test_data(
             args.data_dir,
             args.data_save_dir,

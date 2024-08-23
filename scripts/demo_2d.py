@@ -37,17 +37,14 @@ def render_predcitions(pred_dp, img_name, camera_k, bboxes_gt):
     scale_depth = False
     write_pcd = False
     
-    # Load Background Image
-    img_vis=img_name
-    if isinstance(img_vis, list):
-        img_vis = img_vis[0]
-        assert isinstance(img_vis, str)
-        output_prefix = img_vis.replace('/','-')
-        img_full_path= os.path.join("data/NOCSDataset", img_vis)
-        color_img_path = img_full_path + '_color.png'
-        if not os.path.exists(color_img_path):
-            raise ValueError
-        img_vis = cv2.imread(color_img_path)  # type:ignore
+    
+    assert isinstance(img_name, str)
+    output_prefix = img_name.replace('/','-')
+    img_full_path= os.path.join("data/NOCSDataset", img_name)
+    color_img_path = img_full_path + '_color.png'
+    if not os.path.exists(color_img_path):
+        raise ValueError
+    img_vis = cv2.imread(color_img_path)  # type:ignore
     
     pred_xyzs = pred_dp.endpoints["xyz"]
     

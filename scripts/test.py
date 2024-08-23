@@ -1,6 +1,6 @@
 import torch
 import argparse
-
+import os
 import sys
 CORSAIR_DIR = "/home/chengyh23/Documents/CORSAIR"
 sys.path.append(CORSAIR_DIR)
@@ -92,4 +92,23 @@ def main():
     test_net(args, config)
     
 if __name__ == "__main__":
-    main()
+    # main()
+    data_dir = "data/NOCSDataset/"
+    source = "CAMERA"
+    img_path = "val/00008/0002"
+    from common.utils.nocs_utils import load_depth, align_nocs_to_depth
+    from scene_grasp.scene_grasp_net.data_generation.generate_data_nocs import process_data
+    img_full_path = os.path.join(data_dir, source, img_path)
+    depth_full_path_real = img_full_path + '_depth.png'
+    all_exist = os.path.exists(img_full_path + '_color.png') and \
+                os.path.exists(img_full_path + '_coord.png') and \
+                os.path.exists(img_full_path + '_depth.png') and \
+                os.path.exists(img_full_path + '_mask.png') and \
+                os.path.exists(img_full_path + '_meta.txt') and \
+                os.path.exists(depth_full_path_real)
+    if not all_exist:
+        print("not all exist")
+        exit
+    depth = load_depth(depth_full_path_real)
+    masks, coords, class_ids, instance_ids, model_list, bboxes = process_data(img_full_path, depth)
+    

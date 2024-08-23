@@ -15,7 +15,7 @@ def main():
     parser.add_argument("--type", type=str, default="camera_train")
     args = parser.parse_args()
 
-    worker_per_gpu = 2 # 12
+    worker_per_gpu = 8 # 12
     GPUS = [0, 1, 2, 3]
     print("=============> Using GPUS ", GPUS)
     workers = len(GPUS) * worker_per_gpu
@@ -32,7 +32,7 @@ def main():
             .read()
             .splitlines()
         )
-        list_all = list_all[:1000]
+        # list_all = list_all[:1000]
     elif args.type == "real_train":
         list_all = (
             open(os.path.join(args.data_dir, "Real", "train_list_all.txt"))

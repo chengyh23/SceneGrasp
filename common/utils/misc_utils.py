@@ -705,7 +705,7 @@ def get_scene_grasp_model_params(args_list=None):
             "checkpoints/scale_ae.pth",
             # newly add
             "--val_path=file://data/scene_grasp_net_preprocessed_data/CAMERA/val",
-            "--val_batch_size", "1"
+            "--val_batch_size", "1",
         ]
     parser = argparse.ArgumentParser(fromfile_prefix_chars="@")
     add_train_args(parser)

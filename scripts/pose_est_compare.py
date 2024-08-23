@@ -22,8 +22,10 @@ from common.utils.scene_grasp_utils import (
     get_final_grasps_from_predictions_np,
     get_grasp_vis,
 )
+from scene_grasp.scene_grasp_net.utils.matches_utils import get_matches, load_deformnet_nocs_results
 from scene_grasp.scene_grasp_net.utils.nocs_eval_utils import compute_mAP
 from scripts.class2synsetId import CLS2SYNSET_ID
+from scripts.demo_2d import render_predcitions
 
 CORSAIR_DIR = "/home/chengyh23/Documents/CORSAIR"
 sys.path.append(CORSAIR_DIR)
@@ -63,6 +65,14 @@ def get_model_ids(synset_id: str, split="all") -> List[str]:
     return _split_df[_split_df["synsetId"] == synset_id]["modelId"].tolist()
 
 def corsair_model2(base_pc, config, synset_id, model_id, feat_extractor, retrieval_module_):
+    """
+    Ref. /home/chengyh23/Documents/CORSAIR/src/scene_level.py
+    
+    Args:
+        feat_extractor: global/local feature extraction network
+    Return: 
+        t_loss, r_loss
+    """
     # # from ...CORSAIR.src.scene_level import align_scene
     # from src.scene_level import align_object
     # T_est, pcs_, colors_ = align_object(base_pc, feature_extractor, retrieval_module_, pos_sym=1)
@@ -233,10 +243,58 @@ def corsair_model(base_pc, config, synset_id, model_id):
     # print(t_loss, r_loss)
     return t_loss, r_loss
 
+def objects_stat(hparams):
+    """number of ground truth objects and predicted objects in all scenes
 
-def main(hparams):    
+    Ref. main()
+    """
+    print("Loading model from checkpoint: ", hparams.checkpoint)
+    scene_grasp_model = SceneGraspModel(hparams)
+    data_generator = scene_grasp_model.model.val_dataloader()
+    # model = PanopticModel(hparams, 0, None, None)
+    # data_generator = model.val_dataloader()
+    assert data_generator.batch_size == 1   # TODO add batch processing
+    demo_data_path = Path("outreach/demo_data")
+    camera_k = np.loadtxt(demo_data_path / "camera_k.txt")
+    counts = [0 for _ in range(7)]
+    counts_pred = [0 for _ in range(7)]
+    # counts = np.zeros(7)
+    _i=0
+    for batch in tqdm(data_generator):
+        _i += 1
+        # image, seg_target, depth_target, pose_targets, detections_gt, scene_name = batch
+        image, seg_target, modelIds, depth_target, pose_targets, bboxes_gt, _, img_name, scene_name = batch
+        modelIds = modelIds[0]
+        img_name = img_name[0]
+        pred_dp = scene_grasp_model.get_predictions_from_preprocessed(image, camera_k)
+        
+        
+        # print(modelIds)
+        nocs = load_deformnet_nocs_results(img_name, "data/deformnet_eval/nocs_results/")
+        gt_class_ids = nocs['gt_class_ids']
+        for id in gt_class_ids:
+            counts[id] += 1
+        pred_class_ids = np.array([])
+        if pred_dp is not None:
+            pred_class_ids = np.array(pred_dp.class_ids)
+            # render_predcitions(pred_dp, img_name, camera_k, bboxes_gt)
+        for id in pred_class_ids:
+            counts_pred[id] += 1
+        print(_i, '>', img_name)
+        print(gt_class_ids, counts)
+        print(pred_class_ids, counts_pred)
+        # if _i==5: break
+        
+def main(hparams, ):
+    """
+    Get pose estimation from direct prediction and retrieval/registration based,
+    compute RTE/RRE of both methods and write to file.
+    
+    Ref. scripts/demo.py for getting predictions from SceneGrasp
+    """
     TOP_K = 200  # TODO: use greedy-nms for top-k to get better distributions!
-    CLASS_OF_INTEREST = 4
+    # class_of_interest = 4   # can
+    class_of_interest = 5   # laptop
     # SceneGrasp Model:
     print("Loading model from checkpoint: ", hparams.checkpoint)
     scene_grasp_model = SceneGraspModel(hparams)
@@ -249,6 +307,8 @@ def main(hparams):
     desired_params = {
         "device": torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
         "resume": os.path.join("/home/chengyh23/Documents/CORSAIR-ERL", "ckpts", f"scannet_ret_table_best"),
+        # "resume": os.path.join("/home/chengyh23/Documents/CORSAIR", "src/ckpts", "cat_ret_conv256max_01_FCGFus_can"),
+        # "resume": os.path.join("/home/chengyh23/Documents/CORSAIR", "src/ckpts", "cat_ret_conv256max_01_FCGFus_laptop"),
         "root": "/media/sdb2/chengyh23/ShapeNetCore.v2.PCD.npy/sample15000/ncc",
         
         "embedding": "conv1_max_embedding",
@@ -259,7 +319,7 @@ def main(hparams):
         "conv1_kernel_size": 3,
         "bn_momentum": 0.05,
         
-        "catid": CLS2SYNSET_ID[CLASS_OF_INTEREST],
+        "catid": CLS2SYNSET_ID[class_of_interest],
     }
     config = get_config(desired_params)
         
@@ -281,96 +341,99 @@ def main(hparams):
     }
     _i=0
     for batch in tqdm(data_generator):
-        # image, seg_target, depth_target, pose_targets, detections_gt, scene_name = batch
-        image, seg_target, modelIds, depth_target, pose_targets, bboxes_gt, _, img_name, scene_name = batch
-        modelIds = modelIds[0]
-        img_name = img_name[0]
-        # if img_name != "CAMERA/val/00013/0006": continue    # DEBUG
-        pred_dp = scene_grasp_model.get_predictions_from_preprocessed(image, camera_k)
-        if pred_dp is None:
-            print(f"[{img_name}] > No objects found.")
-            continue
-        print(f"[{img_name}] > ")
-        
-        # from scripts.demo_2d import render_predcitions
-        # render_predcitions(pred_dp, img_name, camera_k, bboxes_gt)
-        # print(img_name)
-        # # if img_name == "CAMERA/val/00013/0002":
-        # if img_name == "CAMERA/val/00000/0009":
-        #     print(len(pred_dp.obj_canonical_pcls))
-        #     colors = ["BLUE","RED","BLACK"]
-        #     colors = colors[:len(pred_dp.obj_canonical_pcls)]
-        #     Wvisualize(pred_dp.obj_canonical_pcls, colors)
-        
-        # >>>>>> Match prediction with ground truth (object detection) >>>>>>
-        # compute_mAP(pred_dp)
-        from scene_grasp.scene_grasp_net.utils.matches_utils import get_matches, load_deformnet_nocs_results
-        degree_thres_list = list(range(0, 61, 1))
-        shift_thres_list = [i / 2 for i in range(21)]
-        # iou_thres_list = [i / 100 for i in range(101)]
-        iou_thres_list = [i / 100 for i in range(3)]
-        nocs = load_deformnet_nocs_results(img_name, "data/deformnet_eval/nocs_results/")
-        iou_pred_matches_all, pose_pred_matches_all, iou_gt_matches_all, pose_gt_matches_all = get_matches(
-            pred_dp, nocs, "results/",
-            degree_thres_list, shift_thres_list, iou_thres_list, iou_pose_thres=0.1, use_matches_for_pose=False)
-        
-        gt_class_ids = nocs['gt_class_ids']
-        pred_class_ids = np.array(pred_dp.class_ids)
-        print("objects: ", gt_class_ids, pred_class_ids) # DEBUG
-        print("matches: ", iou_pred_matches_all[0,:], iou_gt_matches_all[0,:])   # DEBUG
-        
-        # >>>>>> Compare direct pose prediction VS RANSAC pose estimation >>>>>>
-        from scripts.class2synsetId import WORD2CLS_ID, WORD2SYNSET_ID
-        # assert pred_dp.get_len() == len(modelIds)
-        # for i in range(pred_dp.get_len()):
-            # Filter class of interest AND instance matched well with ground truth
-        #     class_id = pred_dp.class_ids[i]
-        #     synset_id = CLS2SYNSET_ID[class_id]
-        #     if synset_id != "03642806":
-        #         continue
-        #     if iou_pred_matches_all[i] == -1:
-        #         continue
-        n_ooi = 0   # number of objects of interest
-        for pred_idx, gt_idx in enumerate(iou_pred_matches_all[0, :]):
-            # Filter class of interest AND instance matched well with ground truth
-            if pred_class_ids[pred_idx] != CLASS_OF_INTEREST:
-                continue
-            if gt_idx == -1:
-                continue
-            print("New OOI! ")
-            n_ooi += 1
-            # 1. Directly Predict Pose
-            from utils.eval_pose import eval_pose_my
-            T_est =  pred_dp.pose_matrices[pred_idx, :, :]
-            T_target = nocs['gt_RTs'][gt_idx, :, :]   # 4,4
-            # T_target = nocs['gt_scales'][pred_idx, :]   # 3
-            t_loss1, r_loss1 = eval_pose_my(T_est, T_target)
-            print('[Direct pose prediction] RTE {0:.2f}, RRE {1:.2f}'.format(t_loss1, r_loss1))
-            
-            # 2. Give to CORSAIR
-            # base_pc = pred_dp.endpoints['xyz'][pred_idx]
-            base_pc = pred_dp.obj_canonical_pcls[pred_idx]
-            model_id = modelIds[gt_idx]
-            synset_id = CLS2SYNSET_ID[CLASS_OF_INTEREST]
-            # t_loss, r_loss = corsair_model(base_pc, config, synset_id, model_id)
-            t_loss2, r_loss2 = corsair_model2(base_pc, config, synset_id, model_id, feature_extractor, retrieval_module_)
-            print('[Registration-based pose prediction] RTE {0:.2f}, RRE {1:.2f}'.format(t_loss2, r_loss2))
-            
-            stat["img_name"].append(img_name)
-            stat["pred_idx"].append(pred_idx)
-            stat["gt_idx"].append(gt_idx)
-            stat["RTE_pred"].append(t_loss1)
-            stat["RRE_pred"].append(r_loss1)
-            stat["RTE_regis"].append(t_loss2)
-            stat["RRE_regis"].append(r_loss2)
-
-        print("Total # OOI: ", n_ooi)
         _i += 1
-        # if _i > 2: 
-        #     break
+        if _i > 3000: 
+            break
+        try:
+            # image, seg_target, depth_target, pose_targets, detections_gt, scene_name = batch
+            image, seg_target, modelIds, depth_target, pose_targets, bboxes_gt, _, img_name, scene_name = batch
+            modelIds = modelIds[0]
+            img_name = img_name[0]
+            # if img_name != "CAMERA/val/02159/0000": continue    # DEBUG
+            pred_dp = scene_grasp_model.get_predictions_from_preprocessed(image, camera_k)
+            if pred_dp is None:
+                print(f"[{img_name}] > No objects found.")
+                continue
+            print(f"[{img_name}] > ")
+            
+            # render_predcitions(pred_dp, img_name, camera_k, bboxes_gt)
+            # print(img_name)
+            # # if img_name == "CAMERA/val/00013/0002":
+            # if img_name == "CAMERA/val/00000/0009":
+            #     print(len(pred_dp.obj_canonical_pcls))
+            #     colors = ["BLUE","RED","BLACK"]
+            #     colors = colors[:len(pred_dp.obj_canonical_pcls)]
+            #     Wvisualize(pred_dp.obj_canonical_pcls, colors)
+            
+            # >>>>>> Match prediction with ground truth (object detection) >>>>>>
+            # compute_mAP(pred_dp)
+            degree_thres_list = list(range(0, 61, 1))
+            shift_thres_list = [i / 2 for i in range(21)]
+            # iou_thres_list = [i / 100 for i in range(101)]
+            iou_thres_list = [i / 100 for i in range(3)]
+            nocs = load_deformnet_nocs_results(img_name, "data/deformnet_eval/nocs_results/")
+            iou_pred_matches_all, pose_pred_matches_all, iou_gt_matches_all, pose_gt_matches_all = get_matches(
+                pred_dp, nocs, "results/",
+                degree_thres_list, shift_thres_list, iou_thres_list, iou_pose_thres=0.1, use_matches_for_pose=False)
+            
+            gt_class_ids = nocs['gt_class_ids']
+            pred_class_ids = np.array(pred_dp.class_ids)
+            print("objects: ", gt_class_ids, pred_class_ids) # DEBUG
+            print("matches: ", iou_pred_matches_all[0,:], iou_gt_matches_all[0,:])   # DEBUG
+            
+            # >>>>>> Compare direct pose prediction VS RANSAC pose estimation >>>>>>
+            from scripts.class2synsetId import WORD2CLS_ID, WORD2SYNSET_ID
+            # assert pred_dp.get_len() == len(modelIds)
+            # for i in range(pred_dp.get_len()):
+                # Filter class of interest AND instance matched well with ground truth
+            #     class_id = pred_dp.class_ids[i]
+            #     synset_id = CLS2SYNSET_ID[class_id]
+            #     if synset_id != "03642806":
+            #         continue
+            #     if iou_pred_matches_all[i] == -1:
+            #         continue
+            n_ooi = 0   # number of objects of interest
+            for pred_idx, gt_idx in enumerate(iou_pred_matches_all[0, :]):
+                # Filter class of interest AND instance matched well with ground truth
+                if pred_class_ids[pred_idx] != class_of_interest:
+                    continue
+                if gt_idx == -1:
+                    continue
+                print("New OOI! ")
+                n_ooi += 1
+                # 1. Directly Predict Pose
+                from utils.eval_pose import eval_pose_my
+                T_est =  pred_dp.pose_matrices[pred_idx, :, :]
+                T_target = nocs['gt_RTs'][gt_idx, :, :]   # 4,4
+                # T_target = nocs['gt_scales'][pred_idx, :]   # 3
+                t_loss1, r_loss1 = eval_pose_my(T_est, T_target)
+                print('[Direct pose prediction] RTE {0:.2f}, RRE {1:.2f}'.format(t_loss1, r_loss1))
+                
+                # 2. Give to CORSAIR
+                # base_pc = pred_dp.endpoints['xyz'][pred_idx]
+                base_pc = pred_dp.obj_canonical_pcls[pred_idx]
+                model_id = modelIds[gt_idx]
+                synset_id = CLS2SYNSET_ID[class_of_interest]
+                # t_loss, r_loss = corsair_model(base_pc, config, synset_id, model_id)
+                t_loss2, r_loss2 = corsair_model2(base_pc, config, synset_id, model_id, feature_extractor, retrieval_module_)
+                print('[Registration-based pose prediction] RTE {0:.2f}, RRE {1:.2f}'.format(t_loss2, r_loss2))
+                
+                stat["img_name"].append(img_name)
+                stat["pred_idx"].append(pred_idx)
+                stat["gt_idx"].append(gt_idx)
+                stat["RTE_pred"].append(t_loss1)
+                stat["RRE_pred"].append(r_loss1)
+                stat["RTE_regis"].append(t_loss2)
+                stat["RRE_regis"].append(r_loss2)
+
+            print("Total # OOI: ", n_ooi)
+        except Exception as e:
+            print("Exception occured while processing it")
+
+        
     # Save results
     ckpt_name = os.path.split(config.resume)[1]
-    catid = CLS2SYNSET_ID[CLASS_OF_INTEREST]
+    catid = CLS2SYNSET_ID[class_of_interest]
     now = datetime.datetime.now()
     time_str = now.strftime('%Y%m%d_%H%M%S')
     out_stat_filename = f"{ckpt_name}-{catid}-{time_str}.csv"
@@ -379,10 +442,57 @@ def main(hparams):
     print("Write to {}".format(os.path.join("results/pose/", out_stat_filename)))
     return
 
+def organize_result(in_stat_filename):
+    """Plot CDF of RTE/RRE
+    """
+    import matplotlib.pyplot as plt
+    threshRRE = [5, 15, 45]
+    threshRTE = [0.03, 0.05, 0.10]
+    _name = os.path.splitext(in_stat_filename)[0]
+    ckpt_name, catid, time_str = _name.split('-')
+    # print(ckpt_name, catid, time_str)
+
+    data = pd.read_csv(os.path.join("results/pose/", in_stat_filename))  # 将 'your_file.csv' 替换为实际的文件路径
+
+    print(data.head())
+
+    fig, axs = plt.subplots(1, 2, figsize=(10,6))
+    for i, err_name in enumerate(["RTE","RRE"]):
+        # RTE_pred = np.array(data["RTE_pred"])
+        err_pred = data[f"{err_name}_pred"].tolist()
+        err_pred.sort()
+        cdf_pred = np.arange(1, len(err_pred) + 1) / len(err_pred)
+
+        err_regis = data[f"{err_name}_regis"].tolist()
+        err_regis.sort()
+        cdf_regis = np.arange(1, len(err_regis) + 1) / len(err_regis)
+        # 第一个子图
+        axs[i].plot(err_pred, cdf_pred, label='direct prediction')
+        axs[i].plot(err_regis, cdf_regis, label='registration-based')
+        axs[i].set_title(err_name, fontsize=16)
+        axs[i].set_xlabel('Error')
+        axs[i].set_ylabel('Cumulative Probability')
+        axs[i].legend(fontsize=14) 
+    # 调整子图之间的间距
+    plt.tight_layout()
+    out_fig_name = f"{ckpt_name}-{catid}-{time_str}-pose_est_compare.png"
+    plt.savefig(os.path.join("results/pose/", out_fig_name))
+    print("Write to", os.path.join("results/pose/", out_fig_name))
+    # plt.show()
 
 if __name__ == "__main__":
-    args_list = None
-    if len(sys.argv) > 1:
-        args_list = sys.argv[1:]
-    hparams = get_scene_grasp_model_params(args_list)
-    main(hparams)
+    # # Write stat
+    # args_list = None
+    # if len(sys.argv) > 1:
+    #     args_list = sys.argv[1:]
+    # hparams = get_scene_grasp_model_params(args_list)
+    # main(hparams)
+    # # objects_stat(hparams)
+    
+    # Read stat
+    # in_stat_filename = "scannet_ret_table_best-02946921-20240818_085604.csv"
+    in_stat_filename = "scannet_ret_table_best-03642806-20240821_232835.csv"
+    # in_stat_filename = "cat_ret_conv256max_01_FCGFus_can-02946921-20240819_202649.csv"
+    # in_stat_filename = "cat_ret_conv256max_01_FCGFus_laptop-03642806-20240819_194441.csv"
+    # in_stat_filename = "cat_ret_conv256max_01_FCGFus_laptop-03642806-20240821_204018.csv"
+    organize_result(in_stat_filename)
