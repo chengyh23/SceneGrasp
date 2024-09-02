@@ -43,16 +43,6 @@ from utils.Info.CADLib import CustomizeCADLib
 # from ...CORSAIR.utils.visualize import Wvisualize
 from utils.visualize import Wvisualize
 
-def get_demo_data_generator(demo_data_path):
-    camera_k = np.loadtxt(demo_data_path / "camera_k.txt")
-
-    for color_img_path in demo_data_path.rglob("*_color.png"):
-        depth_img_path = color_img_path.parent / (
-            color_img_path.stem.split("_")[0] + "_depth.png"
-        )
-        color_img = cv2.imread(str(color_img_path))  # type:ignore
-        depth_img = load_depth(str(depth_img_path))
-        yield color_img, depth_img, camera_k
         
 def get_model_ids(synset_id: str, split="all") -> List[str]:
     """Get all models' Id in category synset_id, under fullset or train/val/test split subset
@@ -83,7 +73,7 @@ def corsair_model2(base_pc, config, synset_id, model_id, feat_extractor, retriev
     # Retrieve from library using global feature
     _, topn_idx = retrieval_module_.Top1_my(base_global_feat.detach().cpu().numpy())
     pos_local_feat = retrieval_module_.local_feat_lib[topn_idx[0]]
-    pose_coords = retrieval_module_.cadlib[topn_idx[0]]["origin"]
+    pos_coords = retrieval_module_.cadlib[topn_idx[0]]["origin"]
     pose_coord_grid = retrieval_module_.cadlib[topn_idx[0]]["coord"]
     T1 = retrieval_module_.cadlib[topn_idx[0]]["T"]
     # T1 = retrieval_module_.Ts_lib[topn_idx[0], :, :]
@@ -92,12 +82,11 @@ def corsair_model2(base_pc, config, synset_id, model_id, feat_extractor, retriev
     # return -1
     
     # Registration using local feature
-    # from ...CORSAIR.src.scene_level import sym_pose
-    from src.scene_level import sym_pose
-    # from ...CORSAIR.utils.eval_pose import eval_pose
-    from utils.eval_pose import eval_pose
-    T_est = sym_pose(base_local_feat, base_coords, pos_local_feat, pose_coords, pos_sym=2)
+    from src.scene_level import sym_pose    #CORSAIR
+    from utils.eval_pose import eval_pose   # CORSAIR
+    T_est = sym_pose(base_local_feat, base_coords, pos_local_feat, pos_coords, pos_sym=1)
     # sym_pose(baseF, xyz0, posF, xyz1, pos_sym, k_nn=5, max_corr=0.20):
+    return T_est, pos_coords
     t_loss, r_loss = eval_pose(T_est, T0, T1)
     # print(t_loss, r_loss)
     return t_loss, r_loss
@@ -237,7 +226,7 @@ def corsair_model(base_pc, config, synset_id, model_id):
     # # Wvisualize([base_coords_grid, xyz1_coord_grid], ["BLUE","RED"])
     # return -1
     
-    T_est = sym_pose(base_output.F, base_data["base_origin"], lib_outputs[topn_idx[0]], xyz1, pos_sym=2)
+    T_est = sym_pose(base_output.F, base_data["base_origin"], lib_outputs[topn_idx[0]], xyz1, pos_sym=1)
     # sym_pose(baseF, xyz0, posF, xyz1, pos_sym, k_nn=5, max_corr=0.20):
     t_loss, r_loss = eval_pose(T_est, T0, T1)
     # print(t_loss, r_loss)
@@ -457,6 +446,7 @@ def organize_result(in_stat_filename):
     print(data.head())
 
     fig, axs = plt.subplots(1, 2, figsize=(10,6))
+    err_units = ["", " (rad)"]
     for i, err_name in enumerate(["RTE","RRE"]):
         # RTE_pred = np.array(data["RTE_pred"])
         err_pred = data[f"{err_name}_pred"].tolist()
@@ -465,13 +455,19 @@ def organize_result(in_stat_filename):
 
         err_regis = data[f"{err_name}_regis"].tolist()
         err_regis.sort()
+        # err_regis = np.array(err_regis)
+        # # err_regis = err_regis[err_regis<2.8] # TODO
+        # err_regis[err_regis>1.57] = 3.14 - err_regis[err_regis>1.57] # TODO
+        # err_regis = np.sort(err_regis)
         cdf_regis = np.arange(1, len(err_regis) + 1) / len(err_regis)
-        # 第一个子图
+        # Plot
+        cdf_pred *= 100
+        cdf_regis *= 100
         axs[i].plot(err_pred, cdf_pred, label='direct prediction')
-        axs[i].plot(err_regis, cdf_regis, label='registration-based')
-        axs[i].set_title(err_name, fontsize=16)
-        axs[i].set_xlabel('Error')
-        axs[i].set_ylabel('Cumulative Probability')
+        axs[i].plot(err_regis, cdf_regis, label='retrievel-registration')
+        axs[i].set_title(f'NOCS Laptop {err_name} CDF', fontsize=16)
+        axs[i].set_xlabel(err_name + err_units[i])
+        axs[i].set_ylabel('Percentage %')
         axs[i].legend(fontsize=14) 
     # 调整子图之间的间距
     plt.tight_layout()

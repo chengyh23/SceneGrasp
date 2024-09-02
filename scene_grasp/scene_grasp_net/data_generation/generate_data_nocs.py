@@ -606,6 +606,7 @@ def annotate_test_data(
                 boxes=bboxes,
                 detections=[],
                 img_name=os.path.join(source, img_path),
+                instance_ids=instance_ids,
                 )
                 _DATASET.write(panoptic_datapoint)
                 print("Written:", img_ind, img_path)

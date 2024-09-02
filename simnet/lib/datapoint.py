@@ -75,6 +75,7 @@ class Panoptic:
   depth: np.ndarray
   segmentation: np.ndarray
   modelIds: list  # objects' ShapeNet modelId, corresponding to segmentation (class id)
+  instance_ids: list  # list of instance ids
   object_poses: list
   boxes: list
   detections: list
