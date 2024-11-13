@@ -4,6 +4,8 @@ Johan Cheng
 
 This script is used to compare pose estimation performance of 
 direct prediction VS retrieval/registration-based estimation.
+
+SceneGrasp outputs to CORSAIR
 """
 import cv2
 import numpy as np
@@ -91,6 +93,11 @@ def corsair_model2(base_pc, config, synset_id, model_id, feat_extractor, retriev
     # print(t_loss, r_loss)
     return t_loss, r_loss
     
+def corsair_model_retrieve(base_pc, feat_extractor, retrieval_module_):
+    base_local_feat, base_global_feat, base_coords = feat_extractor.process(base_pc)
+    _, topn_idx = retrieval_module_.Top1_my(base_global_feat.detach().cpu().numpy())
+    
+    return
 def corsair_model(base_pc, config, synset_id, model_id):
     """
     Ref. https://github.com/ExistentialRobotics/CORSAIR/blob/main/evaluation.py

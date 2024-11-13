@@ -328,7 +328,7 @@ def main(hparams, ):
                 + pred_canonical_pcls_ooi_3d + pred_pcls_ooi_o3d \
                 + retrieved_pcls_shapenet_ooi_o3d \
                 + retrieved_pcls_canonical_ooi_o3d + retrieved_pcls_ooi_o3d \
-                # + retrieved_pcls_nocs_ooi_o3d + retrieved_pcls_nocs_target_ooi_o3d \
+                + retrieved_pcls_nocs_ooi_o3d + retrieved_pcls_nocs_target_ooi_o3d \
                 # + nocs_pcls_ooi_o3d + nocs_pcls_target_ooi_o3d
                 # + query_pcls_norm_ooi_o3d \
         )

@@ -24,6 +24,8 @@ def get_intrinsic():
 
 def rgbd2pcls_scene(img_path):
     """Create a pointcloud for a NOCS scene from an RGB-D image and a camera.
+    Return:
+        pcd: open3d.geometry.PointCloud
     """
     all_exist = os.path.exists(img_path + '_color.png') and \
                 os.path.exists(img_path + '_depth.png')
@@ -42,6 +44,7 @@ def rgbd2pcls_scene(img_path):
     fx, fy, cx, cy = get_intrinsic()
     intrinsic = o3d.camera.PinholeCameraIntrinsic(W,H,fx,fy,cx,cy)
     pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd, intrinsic)
+    return pcd
     o3d.visualization.webrtc_server.enable_webrtc()
     o3d.visualization.draw(pcd)
     # Wvisualize([pcd],["GREEN"])
@@ -85,8 +88,7 @@ def rgbd2pcls_object(img_path):
     all_exist = os.path.exists(img_path + '_color.png') and \
                 os.path.exists(img_path + '_depth.png')
     if not all_exist:
-        print("not all exist")
-        raise
+        raise FileExistsError(f"not all exist in {img_path}")
     img = cv2.imread(img_path + '_color.png')
     depth = load_depth(img_path + '_depth.png')
     mask_path = img_path + '_mask.png'
@@ -111,6 +113,7 @@ def rgbd2pcls_object(img_path):
         fx, fy, cx, cy = get_intrinsic()
         intrinsic = o3d.camera.PinholeCameraIntrinsic(W,H,fx,fy,cx,cy)
         pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd, intrinsic)
+        return pcd
         o3d.visualization.webrtc_server.enable_webrtc()
         o3d.visualization.draw(pcd)
         # Wvisualize([pcd],["GREEN"])

@@ -6,6 +6,7 @@ import os
 from imageio import get_writer
 import matplotlib as mpl
 import numpy as np
+from scipy import ndimage
 from pygifsicle import optimize
 import pyrender
 import torch
@@ -564,6 +565,47 @@ def get_ids_from_seg_pred(seg_pred, output_indices):
 def get_ids_from_seg_output(seg_output, output_indices):
     return get_ids_from_seg_pred(seg_output.seg_pred.cpu().numpy(), output_indices)
 
+def get_masks_from_seg_pred(seg_pred, output_indices):
+    """
+    Args:
+        seg_pred (numpy.ndarray): (1,7,480,640)
+        output_indices (List[numpy.ndarray]): 2d-index of predicted objects' centers
+
+    Returns:
+        masks_predicted (List[numpy.ndarray]): masks for predicted objects
+    """
+    category_seg_output = np.ascontiguousarray(seg_pred)
+    category_seg_output = np.argmax(category_seg_output[0], axis=0)
+    masks_predicted = []
+    for k in range(len(output_indices)):
+        center = output_indices[k]
+        class_id = category_seg_output[center[0], center[1]]
+        class_mask = np.zeros_like(category_seg_output)
+        class_mask[category_seg_output == class_id] = 1
+        # if there are multiple objects of 1 class
+        labeled_mask, num_labels = ndimage.label(class_mask)
+        _label = labeled_mask[center[0], center[1]]
+        if _label == 0:
+            raise ValueError(f"No object found at the given center: {center} for class {class_id}")        
+        object_mask = np.zeros_like(category_seg_output)
+        object_mask[labeled_mask == _label] = 1
+        masks_predicted.append(object_mask)
+    return masks_predicted
+
+def get_masks_from_seg_output(seg_output, output_indices):
+    return get_masks_from_seg_pred(seg_output.seg_pred.cpu().numpy(), output_indices)
+
+# def get_bboxes_from_seg_pred(seg_pred, output_indices):
+#     category_seg_output = np.ascontiguousarray(seg_pred)
+#     category_seg_output = np.argmax(category_seg_output[0], axis=0)
+#     bboxes_predicted = []
+#     for k in range(len(output_indices)):
+#         center = output_indices[k]
+#         bboxes_predicted.append(category_seg_output[center[0], center[1]])
+#     return bboxes_predicted
+
+# def get_bboxes_from_seg_output(seg_output, output_indices):
+#     return get_bboxes_from_seg_pred(seg_output.seg_pred.cpu().numpy(), output_indices)
 
 def get_o3d_chamfer_distance(o3d_pcl1, o3d_pcl2):
     def one_way_chamfer(src, target):
@@ -704,6 +746,7 @@ def get_scene_grasp_model_params(args_list=None):
             "--scale_ae_path",
             "checkpoints/scale_ae.pth",
             # newly add
+            # "--val_path=file://data/scene_grasp_net_preprocessed_data/Real/train",
             "--val_path=file://data/scene_grasp_net_preprocessed_data/CAMERA/val",
             "--val_batch_size", "1",
         ]

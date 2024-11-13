@@ -39,37 +39,37 @@ def load_scale_ae_for_data_generation(model_path):
 
 def create_img_list(data_dir):
     """ Create train/val/test data list for CAMERA and Real. """
-    # CAMERA dataset
-    for subset in ['val']:
-    # for subset in ['train', 'val']:
-        img_list = []
-        img_dir = os.path.join(data_dir, 'CAMERA', subset)
-        folder_list = [name for name in os.listdir(img_dir) if os.path.isdir(os.path.join(img_dir, name))]
-        for i in range(10*len(folder_list)):
-            folder_id = int(i) // 10
-            img_id = int(i) % 10
-            img_path = os.path.join(subset, '{:05d}'.format(folder_id), '{:04d}'.format(img_id))
-            img_list.append(img_path)
-        with open(os.path.join(data_dir, 'CAMERA', subset+'_list_all.txt'), 'w') as f:
-            for img_path in img_list:
-                f.write("%s\n" % img_path)
-    # # Real dataset
-    # for subset in ['test']:
-    # # for subset in ['train', 'test']:
+    # # CAMERA dataset
+    # for subset in ['val']:
+    # # for subset in ['train', 'val']:
     #     img_list = []
-    #     img_dir = os.path.join(data_dir, 'Real', subset)
-    #     folder_list = [name for name in sorted(os.listdir(img_dir)) if os.path.isdir(os.path.join(img_dir, name))]
-    #     for folder in folder_list:
-    #         img_paths = glob.glob(os.path.join(img_dir, folder, '*_color.png'))
-    #         img_paths = sorted(img_paths)
-    #         for img_full_path in img_paths:
-    #             img_name = os.path.basename(img_full_path)
-    #             img_ind = img_name.split('_')[0]
-    #             img_path = os.path.join(subset, folder, img_ind)
-    #             img_list.append(img_path)
-    #     with open(os.path.join(data_dir, 'Real', subset+'_list_all.txt'), 'w') as f:
+    #     img_dir = os.path.join(data_dir, 'CAMERA', subset)
+    #     folder_list = [name for name in os.listdir(img_dir) if os.path.isdir(os.path.join(img_dir, name))]
+    #     for i in range(10*len(folder_list)):
+    #         folder_id = int(i) // 10
+    #         img_id = int(i) % 10
+    #         img_path = os.path.join(subset, '{:05d}'.format(folder_id), '{:04d}'.format(img_id))
+    #         img_list.append(img_path)
+    #     with open(os.path.join(data_dir, 'CAMERA', subset+'_list_all.txt'), 'w') as f:
     #         for img_path in img_list:
     #             f.write("%s\n" % img_path)
+    # Real dataset
+    for subset in ['train']:
+    # for subset in ['train', 'test']:
+        img_list = []
+        img_dir = os.path.join(data_dir, 'Real', subset)
+        folder_list = [name for name in sorted(os.listdir(img_dir)) if os.path.isdir(os.path.join(img_dir, name))]
+        for folder in folder_list:
+            img_paths = glob.glob(os.path.join(img_dir, folder, '*_color.png'))
+            img_paths = sorted(img_paths)
+            for img_full_path in img_paths:
+                img_name = os.path.basename(img_full_path)
+                img_ind = img_name.split('_')[0]
+                img_path = os.path.join(subset, folder, img_ind)
+                img_list.append(img_path)
+        with open(os.path.join(data_dir, 'Real', subset+'_list_all.txt'), 'w') as f:
+            for img_path in img_list:
+                f.write("%s\n" % img_path)
     print('Write all data paths to file done!')
 
 def align_rotation(R):
@@ -291,8 +291,10 @@ def annotate_camera_train(
 def annotate_real_train(
     data_dir, data_save_dir, model_path, start_ind, end_ind, gen_small_sample
 ):
+    source = 'Real'
     _DATASET = datapoint.make_dataset(f'file://{data_save_dir}/Real/train')
-    estimator = load_estimator(model_path)
+    # estimator = load_estimator(model_path)
+    estimator = load_scale_ae_for_data_generation(model_path)
 
     """ Generate gt labels for Real train data through PnP. """
     _camera = camera.NOCS_Real()
@@ -317,6 +319,7 @@ def annotate_real_train(
     # real_train = np.array(real_train)[np.array([2, 500, 1000, 1500, 1700, 1300, 2000, 2300, 2350, 2750])].tolist()
     real_train = real_train[start_ind:end_ind]
     for img_ind, img_path in tqdm(enumerate(real_train)):
+        print(f"{img_ind}> {img_path}", end="\t")  # DEBUG
         try:
             img_full_path = os.path.join(data_dir, 'Real', img_path)
             depth_full_path = img_full_path+'_depth.png'
@@ -396,20 +399,28 @@ def annotate_real_train(
             rgb_img = colorjitter(Image.fromarray(color_img))
             jitter_img = colorjitter(rgb_img)
             color_img = np.asarray(jitter_img)
+            color_img = np.array(color_img)
             depth_array = np.array(depth, dtype=np.float32)/255.0
             DM = DepthManager()
             noisy_depth  = DM.prepare_depth_data(depth_array)
             stereo_datapoint = datapoint.Stereo(left_color=color_img, right_color=noisy_depth)
             panoptic_datapoint = datapoint.Panoptic(
             stereo=stereo_datapoint,
-            depth=depth_array,
+            depth=noisy_depth,
+            # depth=depth_array,  # noisy_depth
             segmentation=seg_mask,
+            modelIds=model_list,
             object_poses=[obb_datapoint],
-            boxes=[],
-            detections=[]
+            # boxes=[],
+            boxes=bboxes,
+            detections=[],
+            img_name=os.path.join(source, img_path),
+            instance_ids=instance_ids,
             )
+            
             _DATASET.write(panoptic_datapoint)
-            if gen_small_sample and img_ind > 20:
+            print("Written:", img_ind, img_path)
+            if gen_small_sample and img_ind > 3: #20:
                 break
         except Exception as e:
             print("Exception occured while processing ", img_ind, img_path)

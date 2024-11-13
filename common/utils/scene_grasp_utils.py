@@ -13,7 +13,7 @@ from common.config.config_dataset_details import (
     get_gripper_bounds,
 )
 from common.utils.misc_utils import (
-    get_ids_from_seg_output,
+    get_ids_from_seg_output, get_masks_from_seg_output,
     get_position_from_pose,
     get_grasps_from_prediction_np,
     get_gripper_points_lines,
@@ -88,11 +88,16 @@ class SceneGraspModel:
             pred_pose_matrices[abs_pose_out_ind, :, :] = pred_pose.camera_T_object
 
         pred_class_ids = get_ids_from_seg_output(seg_output, output_indices)
+        # seg_pred = seg_output.seg_pred.cpu().numpy()
+        # category_seg_output = np.ascontiguousarray(seg_pred)
+        # category_seg_output = np.argmax(category_seg_output[0], axis=0)
+        pred_masks = get_masks_from_seg_output(seg_output, output_indices)
         nocs_dp = NOCSDataPoint(
             rgb=None,
             depth=None,
             camera_k=camera_k,
-            seg_masks=None,
+            # seg_masks=None,
+            seg_masks=pred_masks,
             class_ids=pred_class_ids,
             class_confidences=scores_out,
             obj_canonical_pcls=canonical_pcls,
